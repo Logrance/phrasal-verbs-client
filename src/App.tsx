@@ -11,17 +11,9 @@ export default function App() {
   const [input, setInput] = useState("");
   const wsRef = useRef<WebSocket | null>(null);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-slate-900 text-white flex items-center justify-center">
-        <div className="animate-spin h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full" />
-      </div>
-    );
-  }
-
-  if (!user) return <LoginPage />;
-
   useEffect(() => {
+    if (!user) return;
+
     const ws = new WebSocket("ws://127.0.0.1:8000/ws/chat");
     wsRef.current = ws;
 
@@ -37,7 +29,17 @@ export default function App() {
     };
 
     return () => ws.close();
-  }, []);
+  }, [user]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-900 text-white flex items-center justify-center">
+        <div className="animate-spin h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full" />
+      </div>
+    );
+  }
+
+  if (!user) return <LoginPage />;
 
   const sendMessage = () => {
     if (!input || !wsRef.current) return;
