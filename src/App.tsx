@@ -1,13 +1,28 @@
 import { useEffect, useRef, useState } from "react";
+import { signOut } from "firebase/auth";
+import { auth } from "./firebase";
+import { useAuth } from "./AuthContext";
+import LoginPage from "./LoginPage";
 import { type ChatMessage } from "./types";
 
 export default function App() {
+  const { user, loading } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const wsRef = useRef<WebSocket | null>(null);
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-900 text-white flex items-center justify-center">
+        <div className="animate-spin h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full" />
+      </div>
+    );
+  }
+
+  if (!user) return <LoginPage />;
+
   useEffect(() => {
-    const ws = new WebSocket("wss://nonopprobrious-vita-nonprovincially.ngrok-free.dev/ws");
+    const ws = new WebSocket("ws://127.0.0.1:8000/ws/chat");
     wsRef.current = ws;
 
     ws.onmessage = (event) => {
@@ -34,8 +49,14 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-900 text-white flex flex-col">
-      <header className="p-4 text-xl font-semibold border-b border-slate-700">
-        Phrasal Verb Tutor
+      <header className="p-4 flex items-center justify-between border-b border-slate-700">
+        <span className="text-xl font-semibold">Phrasal Verb Tutor</span>
+        <button
+          onClick={() => signOut(auth)}
+          className="text-sm text-slate-400 hover:text-white transition-colors"
+        >
+          Sign out
+        </button>
       </header>
 
       <main className="flex-1 overflow-y-auto p-4 space-y-3">
