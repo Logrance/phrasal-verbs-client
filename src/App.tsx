@@ -3,32 +3,60 @@ import { signOut } from "firebase/auth";
 import { auth } from "./firebase";
 import { useAuth } from "./AuthContext";
 import LoginPage from "./LoginPage";
+import GapFillPanel from "./GapFillPanel";
 import { type ChatMessage } from "./types";
 
 export default function App() {
   const { user, loading } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [showPractice, setShowPractice] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
     if (!user) return;
 
-    const ws = new WebSocket("ws://127.0.0.1:8000/ws/chat");
-    wsRef.current = ws;
+    let cancelled = false;
 
-    ws.onmessage = (event) => {
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: event.data },
-      ]);
+    async function connect() {
+      const token = await user!.getIdToken();
+      if (cancelled) return;
+
+      const ws = new WebSocket(
+        `ws://127.0.0.1:8000/ws/chat?token=${encodeURIComponent(token)}`
+      );
+      wsRef.current = ws;
+
+      ws.onmessage = (event) => {
+        // Try to parse as JSON for session_start
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === "session_start") {
+            setConversationId(data.conversation_id);
+            return;
+          }
+        } catch {
+          // Not JSON — it's a regular chat message
+        }
+
+        setMessages((prev) => [
+          ...prev,
+          { role: "assistant", content: event.data },
+        ]);
+      };
+
+      ws.onerror = (err) => {
+        console.error("WebSocket error", err);
+      };
+    }
+
+    connect();
+
+    return () => {
+      cancelled = true;
+      wsRef.current?.close();
     };
-
-    ws.onerror = (err) => {
-      console.error("WebSocket error", err);
-    };
-
-    return () => ws.close();
   }, [user]);
 
   if (loading) {
@@ -53,12 +81,21 @@ export default function App() {
     <div className="min-h-screen bg-slate-900 text-white flex flex-col">
       <header className="p-4 flex items-center justify-between border-b border-slate-700">
         <span className="text-xl font-semibold">Phrasal Verb Tutor</span>
-        <button
-          onClick={() => signOut(auth)}
-          className="text-sm text-slate-400 hover:text-white transition-colors"
-        >
-          Sign out
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowPractice(true)}
+            disabled={!conversationId || messages.length === 0}
+            className="text-sm bg-emerald-600 px-3 py-1 rounded hover:bg-emerald-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            Practice
+          </button>
+          <button
+            onClick={() => signOut(auth)}
+            className="text-sm text-slate-400 hover:text-white transition-colors"
+          >
+            Sign out
+          </button>
+        </div>
       </header>
 
       <main className="flex-1 overflow-y-auto p-4 space-y-3">
@@ -91,6 +128,13 @@ export default function App() {
           Send
         </button>
       </footer>
+
+      {showPractice && conversationId && (
+        <GapFillPanel
+          conversationId={conversationId}
+          onClose={() => setShowPractice(false)}
+        />
+      )}
     </div>
   );
 }
