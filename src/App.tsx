@@ -12,6 +12,9 @@ export default function App() {
   const [input, setInput] = useState("");
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [showPractice, setShowPractice] = useState(false);
+  const [currentVerb, setCurrentVerb] = useState<string | null>(null);
+  const [currentLevel, setCurrentLevel] = useState<string | null>(null);
+  const [wsKey, setWsKey] = useState(0);
   const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
@@ -29,11 +32,12 @@ export default function App() {
       wsRef.current = ws;
 
       ws.onmessage = (event) => {
-        // Try to parse as JSON for session_start
         try {
           const data = JSON.parse(event.data);
           if (data.type === "session_start") {
             setConversationId(data.conversation_id);
+            setCurrentVerb(data.current_phrasal_verb ?? null);
+            setCurrentLevel(data.level ?? null);
             return;
           }
         } catch {
@@ -57,7 +61,14 @@ export default function App() {
       cancelled = true;
       wsRef.current?.close();
     };
-  }, [user]);
+  }, [user, wsKey]);
+
+  const handleAdvance = () => {
+    setMessages([]);
+    setConversationId(null);
+    setShowPractice(false);
+    setWsKey((k) => k + 1);
+  };
 
   if (loading) {
     return (
@@ -80,7 +91,17 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-900 text-white flex flex-col">
       <header className="p-4 flex items-center justify-between border-b border-slate-700">
-        <span className="text-xl font-semibold">Phrasal Verb Tutor</span>
+        <div className="flex flex-col">
+          <span className="text-xl font-semibold">Phrasal Verb Tutor</span>
+          {currentVerb && (
+            <span className="text-sm text-emerald-400">
+              {currentVerb}
+              {currentLevel && (
+                <span className="ml-2 text-slate-400">({currentLevel})</span>
+              )}
+            </span>
+          )}
+        </div>
         <div className="flex items-center gap-3">
           <button
             onClick={() => setShowPractice(true)}
@@ -133,6 +154,7 @@ export default function App() {
         <GapFillPanel
           conversationId={conversationId}
           onClose={() => setShowPractice(false)}
+          onAdvance={handleAdvance}
         />
       )}
     </div>

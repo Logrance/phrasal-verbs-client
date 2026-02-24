@@ -5,6 +5,7 @@ import { type GapFillExercise, type GapFillResponse } from "./types";
 interface Props {
   conversationId: string;
   onClose: () => void;
+  onAdvance: () => void;
 }
 
 interface ExerciseState {
@@ -14,10 +15,11 @@ interface ExerciseState {
   correct: boolean | null;
 }
 
-export default function GapFillPanel({ conversationId, onClose }: Props) {
+export default function GapFillPanel({ conversationId, onClose, onAdvance }: Props) {
   const [exercises, setExercises] = useState<ExerciseState[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [advancing, setAdvancing] = useState(false);
 
   const generateExercises = async () => {
     setLoading(true);
@@ -61,15 +63,39 @@ export default function GapFillPanel({ conversationId, onClose }: Props) {
   };
 
   const checkAnswer = (index: number) => {
-    setExercises((prev) =>
-      prev.map((e, i) => {
+    setExercises((prev) => {
+      const next = prev.map((e, i) => {
         if (i !== index) return e;
         const correct =
           e.answer.trim().toLowerCase() ===
           e.exercise.phrasal_verb.toLowerCase();
         return { ...e, submitted: true, correct };
-      })
-    );
+      });
+
+      // After updating, check if all are submitted and correct
+      const allDone = next.every((e) => e.submitted);
+      const allCorrect = next.every((e) => e.correct === true);
+      if (allDone && allCorrect) {
+        advanceProgress();
+      }
+
+      return next;
+    });
+  };
+
+  const advanceProgress = async () => {
+    setAdvancing(true);
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      await fetch("http://127.0.0.1:8000/api/progress/advance", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      onAdvance();
+    } catch (err) {
+      console.error("Failed to advance progress", err);
+      setAdvancing(false);
+    }
   };
 
   return (
@@ -102,6 +128,13 @@ export default function GapFillPanel({ conversationId, onClose }: Props) {
         {loading && (
           <div className="flex items-center justify-center py-8">
             <div className="animate-spin h-8 w-8 border-4 border-emerald-500 border-t-transparent rounded-full" />
+          </div>
+        )}
+
+        {advancing && (
+          <div className="flex items-center justify-center gap-3 py-4 text-emerald-400">
+            <div className="animate-spin h-5 w-5 border-2 border-emerald-400 border-t-transparent rounded-full" />
+            <span>Moving to next verb...</span>
           </div>
         )}
 
@@ -144,7 +177,7 @@ export default function GapFillPanel({ conversationId, onClose }: Props) {
           </div>
         ))}
 
-        {exercises.length > 0 && !loading && (
+        {exercises.length > 0 && !loading && !advancing && (
           <button
             onClick={generateExercises}
             className="w-full bg-slate-700 py-2 rounded hover:bg-slate-600 transition-colors text-sm text-slate-300"
